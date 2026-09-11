@@ -1,22 +1,19 @@
 const express = require('express');
+const router = express.Router();
 const {
-  getPopular,
-  getTopRated,
-  search,
-  getGenres,
-  getByGenre,
-  getById,
+  getPopularMovies,
+  getTrendingMovies,
+  searchMovies,
+  getMovieGenres,
+  getMoviesByGenre,
+  getMovieDetails
 } = require('../controllers/movieController');
 
-const router = express.Router();
-
-// Specific routes must be registered before the /:id catch-all below,
-// otherwise "popular", "search", etc. would be parsed as a movie id.
-router.get('/popular', getPopular);
-router.get('/top-rated', getTopRated);
-router.get('/search', search);
-router.get('/genres', getGenres);
-router.get('/genre/:genreId', getByGenre);
-router.get('/:id', getById);
+router.get('/popular', getPopularMovies);
+router.get('/trending', getTrendingMovies);
+router.get('/search', searchMovies);
+router.get('/genres', getMovieGenres);
+router.get('/genre/:genreId', getMoviesByGenre);
+router.get('/:id', getMovieDetails);
 
 module.exports = router;

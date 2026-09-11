@@ -1,24 +1,24 @@
 {
-  "name": "movie-discovery-server",
+  "name": "server",
   "version": "1.0.0",
-  "description": "Backend API for the Movie Discovery App",
+  "description": "",
   "main": "server.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "node server.js"
   },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
   "dependencies": {
-    "axios": "^1.7.7",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.0",
-    "express-validator": "^7.2.0",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.7.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.7"
+    "axios": "^1.20.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.5.0"
   }
 }

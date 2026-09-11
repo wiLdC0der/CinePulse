@@ -1,136 +1,162 @@
 const axios = require('axios');
-const { tmdbApiKey, tmdbBaseUrl } = require('../config/env');
-const ApiError = require('../utils/ApiError');
 
-// All TMDB communication lives here so the rest of the app never has
-// to think about the TMDB base URL, auth scheme, or response shape.
-const tmdb = axios.create({
-  baseURL: tmdbBaseUrl,
-  timeout: 8000,
-  params: { api_key: tmdbApiKey },
-});
+const getTmdbClient = () => {
+  const apiKey = process.env.TMDB_API_KEY;
+  const baseUrl = process.env.TMDB_BASE_URL || 'https://api.themoviedb.org/3';
 
-const IMAGE_BASE = 'https://image.tmdb.org/t/p';
-
-function posterUrl(path, size = 'w500') {
-  return path ? `${IMAGE_BASE}/${size}${path}` : null;
-}
-
-function backdropUrl(path, size = 'w1280') {
-  return path ? `${IMAGE_BASE}/${size}${path}` : null;
-}
-
-// Trims a raw TMDB movie object down to the fields the frontend
-// actually renders, and normalizes image paths into full URLs.
-function normalizeMovie(movie) {
-  return {
-    id: movie.id,
-    title: movie.title,
-    overview: movie.overview,
-    posterUrl: posterUrl(movie.poster_path),
-    backdropUrl: backdropUrl(movie.backdrop_path),
-    releaseDate: movie.release_date || null,
-    voteAverage: movie.vote_average ?? 0,
-    genreIds: movie.genre_ids || (movie.genres ? movie.genres.map((g) => g.id) : []),
-  };
-}
-
-function normalizeMovieDetails(movie, credits) {
-  const director = credits?.crew?.find((c) => c.job === 'Director');
-  return {
-    ...normalizeMovie(movie),
-    runtime: movie.runtime || null,
-    genres: movie.genres || [],
-    tagline: movie.tagline || '',
-    director: director ? director.name : null,
-    cast: (credits?.cast || []).slice(0, 8).map((c) => ({
-      id: c.id,
-      name: c.name,
-      character: c.character,
-      profileUrl: posterUrl(c.profile_path, 'w185'),
-    })),
-  };
-}
-
-// Wraps every TMDB call so a network/API failure becomes a clean
-// ApiError instead of an axios error leaking implementation details.
-async function safeRequest(path, params) {
-  try {
-    const { data } = await tmdb.get(path, { params });
-    return data;
-  } catch (err) {
-    if (err.response?.status === 401) {
-      throw new ApiError(500, 'TMDB rejected the API key. Check TMDB_API_KEY on the server.');
-    }
-    if (err.response?.status === 404) {
-      throw new ApiError(404, 'Movie not found');
-    }
-    throw new ApiError(502, 'Unable to reach the movie database right now. Please try again.');
+  if (!apiKey) {
+    throw new Error('TMDB_API_KEY environment variable is missing. Please configure it in your server .env file.');
   }
-}
 
-async function getPopular(page = 1) {
-  const data = await safeRequest('/movie/popular', { page });
-  return {
-    results: data.results.map(normalizeMovie),
-    page: data.page,
-    totalPages: data.total_pages,
-    totalResults: data.total_results,
-  };
-}
-
-async function getTopRated(page = 1) {
-  const data = await safeRequest('/movie/top_rated', { page });
-  return {
-    results: data.results.map(normalizeMovie),
-    page: data.page,
-    totalPages: data.total_pages,
-    totalResults: data.total_results,
-  };
-}
-
-async function searchMovies(query, page = 1) {
-  const data = await safeRequest('/search/movie', { query, page, include_adult: false });
-  return {
-    results: data.results.map(normalizeMovie),
-    page: data.page,
-    totalPages: data.total_pages,
-    totalResults: data.total_results,
-  };
-}
-
-async function getMoviesByGenre(genreId, page = 1) {
-  const data = await safeRequest('/discover/movie', {
-    with_genres: genreId,
-    page,
-    sort_by: 'popularity.desc',
+  return axios.create({
+    baseURL: baseUrl,
+    params: {
+      api_key: apiKey
+    }
   });
-  return {
-    results: data.results.map(normalizeMovie),
-    page: data.page,
-    totalPages: data.total_pages,
-    totalResults: data.total_results,
-  };
-}
-
-async function getMovieDetails(id) {
-  const [movie, credits] = await Promise.all([
-    safeRequest(`/movie/${id}`),
-    safeRequest(`/movie/${id}/credits`),
-  ]);
-  return normalizeMovieDetails(movie, credits);
-}
-
-async function getGenres() {
-  const data = await safeRequest('/genre/movie/list');
-  return data.genres;
-}
-
-module.exports = {
-  getPopular,
-  getTopRated,
-  searchMovies,
-  getMoviesByGenre,
-  getMovieDetails,
-  getGenres,
 };
+
+// Image URL helpers
+const IMAGE_BASE = 'https://image.tmdb.org/t/p/';
+const formatPoster = (path) => path ? `${IMAGE_BASE}w500${path}` : null;
+const formatBackdrop = (path) => path ? `${IMAGE_BASE}w1280${path}` : null;
+
+// Normalize movie object for clean frontend consumption
+const normalizeMovie = (movie) => {
+  if (!movie) return null;
+  return {
+    id: String(movie.id),
+    movieId: String(movie.id),
+    title: movie.title || movie.name || 'Untitled',
+    originalTitle: movie.original_title || '',
+    posterPath: formatPoster(movie.poster_path),
+    backdropPath: formatBackdrop(movie.backdrop_path),
+    releaseDate: movie.release_date || movie.first_air_date || '',
+    releaseYear: (movie.release_date || movie.first_air_date || '').split('-')[0] || '',
+    voteAverage: movie.vote_average ? Number(movie.vote_average.toFixed(1)) : 0,
+    voteCount: movie.vote_count || 0,
+    overview: movie.overview || 'No overview available.',
+    genres: movie.genres || (movie.genre_ids ? movie.genre_ids : []),
+    genreIds: movie.genre_ids || [],
+    runtime: movie.runtime || 0
+  };
+};
+
+const tmdbService = {
+  // Fetch popular movies
+  async getPopular(page = 1) {
+    const client = getTmdbClient();
+    const response = await client.get('/movie/popular', { params: { page } });
+    return {
+      page: response.data.page,
+      totalPages: Math.min(response.data.total_pages, 500), // TMDB caps at 500
+      totalResults: response.data.total_results,
+      results: response.data.results.map(normalizeMovie)
+    };
+  },
+
+  // Fetch trending movies
+  async getTrending(page = 1) {
+    const client = getTmdbClient();
+    const response = await client.get('/trending/movie/week', { params: { page } });
+    return {
+      page: response.data.page,
+      totalPages: Math.min(response.data.total_pages, 500),
+      totalResults: response.data.total_results,
+      results: response.data.results.map(normalizeMovie)
+    };
+  },
+
+  // Search movies by query
+  async searchMovies(query, page = 1, genreId = null) {
+    const client = getTmdbClient();
+    
+    // If query is empty and genreId is provided, use discover endpoint
+    if (!query && genreId) {
+      return this.getByGenre(genreId, page);
+    }
+
+    const params = { query, page };
+    const response = await client.get('/search/movie', { params });
+    let results = response.data.results.map(normalizeMovie);
+
+    // If genreId filter is passed alongside search query
+    if (genreId) {
+      const gId = Number(genreId);
+      results = results.filter(m => Array.isArray(m.genreIds) && m.genreIds.includes(gId));
+    }
+
+    return {
+      page: response.data.page,
+      totalPages: Math.min(response.data.total_pages, 500),
+      totalResults: response.data.total_results,
+      results
+    };
+  },
+
+  // Get movies by Genre ID
+  async getByGenre(genreId, page = 1) {
+    const client = getTmdbClient();
+    const response = await client.get('/discover/movie', {
+      params: { with_genres: genreId, page, sort_by: 'popularity.desc' }
+    });
+    return {
+      page: response.data.page,
+      totalPages: Math.min(response.data.total_pages, 500),
+      totalResults: response.data.total_results,
+      results: response.data.results.map(normalizeMovie)
+    };
+  },
+
+  // Get detailed movie information by ID
+  async getMovieDetails(movieId) {
+    const client = getTmdbClient();
+    const response = await client.get(`/movie/${movieId}`, {
+      params: { append_to_response: 'credits,recommendations' }
+    });
+    
+    const data = response.data;
+    const normalized = normalizeMovie(data);
+
+    // Extract cast & crew info
+    const credits = data.credits || {};
+    const cast = (credits.cast || []).slice(0, 10).map(person => ({
+      id: person.id,
+      name: person.name,
+      character: person.character,
+      profilePath: person.profile_path ? `${IMAGE_BASE}w185${person.profile_path}` : null
+    }));
+
+    const directorObj = (credits.crew || []).find(person => person.job === 'Director');
+    const director = directorObj ? directorObj.name : 'Unknown';
+
+    // Format genres as objects { id, name }
+    const genres = (data.genres || []).map(g => ({ id: g.id, name: g.name }));
+
+    // Format recommendations
+    const recommendations = ((data.recommendations && data.recommendations.results) || [])
+      .slice(0, 6)
+      .map(normalizeMovie);
+
+    return {
+      ...normalized,
+      tagline: data.tagline || '',
+      status: data.status || '',
+      budget: data.budget || 0,
+      revenue: data.revenue || 0,
+      genres,
+      director,
+      cast,
+      recommendations
+    };
+  },
+
+  // Get list of movie genres
+  async getGenres() {
+    const client = getTmdbClient();
+    const response = await client.get('/genre/movie/list');
+    return response.data.genres || [];
+  }
+};
+
+module.exports = tmdbService;

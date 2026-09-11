@@ -1,37 +1,86 @@
+import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-// TMDB caps at 500 pages regardless of totalPages returned; clamp so
-// "Next" never requests a page the API will reject.
-const TMDB_MAX_PAGE = 500;
+const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+  if (totalPages <= 1) return null;
 
-export default function Pagination({ page, totalPages, onPageChange }) {
-  const cappedTotal = Math.min(totalPages || 1, TMDB_MAX_PAGE);
-  if (cappedTotal <= 1) return null;
+  const maxPagesToShow = 5;
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-  const canPrev = page > 1;
-  const canNext = page < cappedTotal;
+  if (endPage - startPage < maxPagesToShow - 1) {
+    startPage = Math.max(1, endPage - maxPagesToShow + 1);
+  }
+
+  const pageNumbers = [];
+  for (let i = startPage; i <= endPage; i++) {
+    pageNumbers.push(i);
+  }
 
   return (
-    <nav className="mt-8 flex items-center justify-center gap-4" aria-label="Pagination">
+    <div className="flex items-center justify-center gap-2 my-8">
+      {/* Previous Button */}
       <button
-        type="button"
-        disabled={!canPrev}
-        onClick={() => onPageChange(page - 1)}
-        className="flex items-center gap-1 rounded border border-ink-700 px-3 py-1.5 text-sm text-paper-300 transition-colors hover:border-marquee hover:text-marquee disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-700 disabled:hover:text-paper-300"
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium flex items-center gap-1 transition-colors"
       >
-        <ChevronLeft size={16} /> Previous
+        <ChevronLeft className="w-4 h-4" />
+        <span>Prev</span>
       </button>
-      <span className="text-sm text-paper-500">
-        Page <span className="text-paper-100">{page}</span> of {cappedTotal}
-      </span>
+
+      {/* First Page if far */}
+      {startPage > 1 && (
+        <>
+          <button
+            onClick={() => onPageChange(1)}
+            className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-medium"
+          >
+            1
+          </button>
+          {startPage > 2 && <span className="text-slate-600 text-xs">...</span>}
+        </>
+      )}
+
+      {/* Page Numbers */}
+      {pageNumbers.map((page) => (
+        <button
+          key={page}
+          onClick={() => onPageChange(page)}
+          className={`w-9 h-9 rounded-lg text-xs font-semibold transition-all ${
+            page === currentPage
+              ? 'bg-red-600 text-white shadow-md shadow-red-950/50'
+              : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          {page}
+        </button>
+      ))}
+
+      {/* Last Page if far */}
+      {endPage < totalPages && (
+        <>
+          {endPage < totalPages - 1 && <span className="text-slate-600 text-xs">...</span>}
+          <button
+            onClick={() => onPageChange(totalPages)}
+            className="w-9 h-9 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-medium"
+          >
+            {totalPages}
+          </button>
+        </>
+      )}
+
+      {/* Next Button */}
       <button
-        type="button"
-        disabled={!canNext}
-        onClick={() => onPageChange(page + 1)}
-        className="flex items-center gap-1 rounded border border-ink-700 px-3 py-1.5 text-sm text-paper-300 transition-colors hover:border-marquee hover:text-marquee disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-ink-700 disabled:hover:text-paper-300"
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-medium flex items-center gap-1 transition-colors"
       >
-        Next <ChevronRight size={16} />
+        <span>Next</span>
+        <ChevronRight className="w-4 h-4" />
       </button>
-    </nav>
+    </div>
   );
-}
+};
+
+export default Pagination;

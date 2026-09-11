@@ -1,50 +1,91 @@
 const tmdbService = require('../services/tmdbService');
-const asyncHandler = require('../utils/asyncHandler');
-const ApiError = require('../utils/ApiError');
 
-const parsePage = (value) => {
-  const page = parseInt(value, 10);
-  return Number.isInteger(page) && page > 0 ? page : 1;
+// @desc    Get popular movies
+// @route   GET /api/movies/popular
+// @access  Public
+const getPopularMovies = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const data = await tmdbService.getPopular(page);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    next(error);
+  }
 };
 
-// GET /api/movies/popular?page=
-const getPopular = asyncHandler(async (req, res) => {
-  const data = await tmdbService.getPopular(parsePage(req.query.page));
-  res.status(200).json({ success: true, data });
-});
-
-// GET /api/movies/top-rated?page=
-const getTopRated = asyncHandler(async (req, res) => {
-  const data = await tmdbService.getTopRated(parsePage(req.query.page));
-  res.status(200).json({ success: true, data });
-});
-
-// GET /api/movies/search?query=&page=
-const search = asyncHandler(async (req, res) => {
-  const { query } = req.query;
-  if (!query || !query.trim()) {
-    throw new ApiError(400, 'A search query is required');
+// @desc    Get trending movies
+// @route   GET /api/movies/trending
+// @access  Public
+const getTrendingMovies = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const data = await tmdbService.getTrending(page);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    next(error);
   }
-  const data = await tmdbService.searchMovies(query.trim(), parsePage(req.query.page));
-  res.status(200).json({ success: true, data });
-});
+};
 
-// GET /api/movies/genres
-const getGenres = asyncHandler(async (req, res) => {
-  const genres = await tmdbService.getGenres();
-  res.status(200).json({ success: true, data: { genres } });
-});
+// @desc    Search movies by query and/or genre
+// @route   GET /api/movies/search?query=&page=&genre=
+// @access  Public
+const searchMovies = async (req, res, next) => {
+  try {
+    const query = req.query.query || '';
+    const page = parseInt(req.query.page, 10) || 1;
+    const genreId = req.query.genre || null;
 
-// GET /api/movies/genre/:genreId
-const getByGenre = asyncHandler(async (req, res) => {
-  const data = await tmdbService.getMoviesByGenre(req.params.genreId, parsePage(req.query.page));
-  res.status(200).json({ success: true, data });
-});
+    const data = await tmdbService.searchMovies(query, page, genreId);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    next(error);
+  }
+};
 
-// GET /api/movies/:id
-const getById = asyncHandler(async (req, res) => {
-  const movie = await tmdbService.getMovieDetails(req.params.id);
-  res.status(200).json({ success: true, data: { movie } });
-});
+// @desc    Get movie genres list
+// @route   GET /api/movies/genres
+// @access  Public
+const getMovieGenres = async (req, res, next) => {
+  try {
+    const genres = await tmdbService.getGenres();
+    res.json({ success: true, genres });
+  } catch (error) {
+    next(error);
+  }
+};
 
-module.exports = { getPopular, getTopRated, search, getGenres, getByGenre, getById };
+// @desc    Get movies by genre
+// @route   GET /api/movies/genre/:genreId
+// @access  Public
+const getMoviesByGenre = async (req, res, next) => {
+  try {
+    const { genreId } = req.params;
+    const page = parseInt(req.query.page, 10) || 1;
+    const data = await tmdbService.getByGenre(genreId, page);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get detailed movie by ID
+// @route   GET /api/movies/:id
+// @access  Public
+const getMovieDetails = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const movie = await tmdbService.getMovieDetails(id);
+    res.json({ success: true, movie });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  getPopularMovies,
+  getTrendingMovies,
+  searchMovies,
+  getMovieGenres,
+  getMoviesByGenre,
+  getMovieDetails
+};

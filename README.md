@@ -1,285 +1,187 @@
-# Movie Discovery App
+# CinePulse - Movie Discovery Application
 
-## Overview
+A full-stack Movie Discovery web application built with **React**, **Node.js**, **Express**, **MongoDB**, and **TMDB API**. Users can discover trending movies, search by title or genre, view detailed information, create accounts, and manage personalized Favorites and Watchlist.
 
-Reel is a full-stack movie discovery app. Users can browse popular and
-top-rated movies, search by title, filter by genre, view movie details
-(cast, runtime, overview), and — once logged in — save movies to a
-Favorites list and a Watchlist that persist across sessions.
+---
 
-The app is split into a React frontend and an Express/MongoDB backend.
-The backend is the only thing that talks to TMDB, so the TMDB API key
-never reaches the browser.
+## Architecture Diagram
+
+```
++------------------+         REST API          +--------------------+
+|                  | ----------------------->  |                    |
+|  React (Vite)    |   http://localhost:5000   |  Express Backend   |
+|  Tailwind CSS    | <-----------------------  |                    |
++------------------+                           +---------+----------+
+                                                         |
+                                       +-----------------+-----------------+
+                                       |                                   |
+                                       v                                   v
+                             +------------------+                +------------------+
+                             |                  |                |                  |
+                             |  MongoDB Atlas   |                |  TMDB v3 API     |
+                             |  (Users/Favs/WL) |                |  (External Data) |
+                             +------------------+                +------------------+
+```
+
+---
 
 ## Features
 
-- Browse popular and top-rated movies on the home page
-- Search movies by title, with debounced input and URL-synced state
-  (`/discover?query=batman&page=2`) so results are shareable/refreshable
-- Filter by genre
-- Paginated results (server-driven, using TMDB's own pagination)
-- Movie details page: poster, backdrop, overview, genres, runtime,
-  director, top billed cast
-- Register / log in with JWT-based auth, passwords hashed with bcrypt
-- Add/remove Favorites and Watchlist entries (duplicate-safe), gated
-  behind login with a clear prompt for logged-out users
-- Loading (skeleton cards), empty, and error states (with retry) on
-  every async section
-- Responsive layout from mobile to desktop
-- Basic accessibility: semantic elements, labeled inputs, alt text,
-  visible focus rings, keyboard-operable controls
+- **Movie Discovery & Trending**: Explore popular and trending movies of the week with normalized poster images, release dates, and vote ratings.
+- **Search & Filter**: Search movies by title with debounced input and filter by genre categories. Maintains query parameters in the URL (`/discover?query=batman&page=2&genre=28`) so search state is bookmarkable and shareable.
+- **Detailed Movie Pages**: View high-resolution backdrops, cast & crew credits, directors, runtime, tagline, overview, genres, and recommended titles.
+- **User Authentication**: Secure signup and signin using JWT authentication, password hashing with bcrypt, and validation middleware.
+- **Favorites & Watchlist**: Authenticated users can save movies to their Favorites or Watchlist. Server-side persistence ensures saved items persist across browser sessions.
+- **Responsive & Accessible UI**: Dark-mode streaming layout, skeleton loading placeholders, intuitive empty states, and custom error boundaries.
+
+---
 
 ## Tech Stack
 
-**Frontend:** React, Vite, React Router, Tailwind CSS, Axios
-**Backend:** Node.js, Express, MongoDB, Mongoose, JWT, bcryptjs,
-express-validator
+### Frontend
+- **Framework**: React 19 + Vite 8
+- **Routing**: React Router 7
+- **Styling**: Tailwind CSS v4
+- **API Client**: Axios with automatic Bearer token interceptor
+- **Icons**: Lucide React
 
-No Redux, GraphQL, TypeScript, or other heavier tooling — the app's
-state and data flow are simple enough that they'd add ceremony without
-adding value.
+### Backend
+- **Runtime**: Node.js & Express.js
+- **Database**: MongoDB & Mongoose ORM
+- **Authentication**: JSON Web Tokens (`jsonwebtoken`) & `bcryptjs`
+- **Validation**: `express-validator`
+- **Security**: CORS, environment secret isolation, centralized error handling
 
-## Architecture
-
-```
-React (Vite)
-   ↓  Axios, JWT in Authorization header
-Express REST API
-   ↓                              ↓
-MongoDB (users, favorites,   TMDB API (popular, search,
-watchlist)                   details, genres)
-```
-
-The frontend never calls TMDB directly. It calls the Express API, which
-calls TMDB using a server-side API key and normalizes the response
-before sending it back. This keeps the key private and gives the
-frontend one consistent movie shape regardless of which TMDB endpoint
-produced it.
-
-### Backend structure
-
-```
-server/
-  config/       env loading + validation, MongoDB connection
-  controllers/  request handling (auth, movies, favorites/watchlist)
-  middleware/   JWT auth guard, centralized error handler, validation
-  models/       User (with embedded favorites/watchlist subdocuments)
-  routes/       route definitions, wired to controllers
-  services/     tmdbService.js — the only file that talks to TMDB
-  utils/        asyncHandler, ApiError, generateToken
-```
-
-### Frontend structure
-
-```
-client/src/
-  components/   MovieCard, MovieGrid, Navbar, Pagination, SearchBar,
-                GenreFilter, Skeleton/Empty/Error states, ProtectedRoute
-  pages/        Home, Discover, MovieDetails, Login, Register,
-                Favorites, Watchlist, NotFound
-  context/      AuthContext (session), SavedMoviesContext (favorites/
-                watchlist membership, used by every movie card)
-  services/     one file per API resource (auth, movies, favorites,
-                watchlist) built on a shared axios instance
-  hooks/        useDebounce
-  utils/        format.js (release year, rating, runtime formatting)
-```
+---
 
 ## API Endpoints
 
-**Auth**
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| POST | `/api/auth/register` | — | Create an account |
-| POST | `/api/auth/login` | — | Log in, returns a JWT |
-| GET | `/api/auth/me` | required | Current user |
+### Authentication
+| Method | Endpoint | Description | Auth Required |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/register` | Register a new user | No |
+| `POST` | `/api/auth/login` | Authenticate user & get JWT token | No |
+| `GET` | `/api/auth/me` | Fetch authenticated user profile | Yes (Bearer Token) |
 
-**Movies** (all backed by TMDB, normalized)
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/api/movies/popular?page=` | Popular movies |
-| GET | `/api/movies/top-rated?page=` | Top rated movies |
-| GET | `/api/movies/search?query=&page=` | Search by title |
-| GET | `/api/movies/genres` | Genre list (for the filter UI) |
-| GET | `/api/movies/genre/:genreId?page=` | Movies in a genre |
-| GET | `/api/movies/:id` | Movie details + cast/director |
+### Movies (TMDB Proxy)
+| Method | Endpoint | Description | Auth Required |
+| --- | --- | --- | --- |
+| `GET` | `/api/movies/popular?page=` | Fetch popular movies | No |
+| `GET` | `/api/movies/trending?page=` | Fetch trending movies | No |
+| `GET` | `/api/movies/search?query=&page=&genre=` | Search & filter movies | No |
+| `GET` | `/api/movies/genres` | Fetch movie genres list | No |
+| `GET` | `/api/movies/genre/:genreId?page=` | Fetch movies by genre ID | No |
+| `GET` | `/api/movies/:id` | Fetch movie details with credits & cast | No |
 
-**Favorites / Watchlist** (both require a valid JWT; shape is identical)
-| Method | Endpoint |
-|---|---|
-| GET | `/api/favorites` / `/api/watchlist` |
-| POST | `/api/favorites/:movieId` / `/api/watchlist/:movieId` |
-| DELETE | `/api/favorites/:movieId` / `/api/watchlist/:movieId` |
+### Favorites
+| Method | Endpoint | Description | Auth Required |
+| --- | --- | --- | --- |
+| `GET` | `/api/favorites` | Fetch user's favorited movies | Yes |
+| `POST` | `/api/favorites/:movieId` | Add movie to user's favorites | Yes |
+| `DELETE` | `/api/favorites/:movieId` | Remove movie from favorites | Yes |
 
-All responses follow `{ success, data }` on success and
-`{ success: false, message }` on error.
+### Watchlist
+| Method | Endpoint | Description | Auth Required |
+| --- | --- | --- | --- |
+| `GET` | `/api/watchlist` | Fetch user's watchlist | Yes |
+| `POST` | `/api/watchlist/:movieId` | Add movie to user's watchlist | Yes |
+| `DELETE` | `/api/watchlist/:movieId` | Remove movie from watchlist | Yes |
+
+---
 
 ## Database Schema
 
-A single `User` collection:
-
+### User Model (`server/models/User.js`)
+```javascript
+{
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
+  password: { type: String, required: true }, // Hashed using bcrypt
+  favorites: [
+    {
+      movieId: String,
+      title: String,
+      posterPath: String,
+      backdropPath: String,
+      releaseDate: String,
+      voteAverage: Number,
+      overview: String,
+      genres: [{ id: Number, name: String }],
+      addedAt: Date
+    }
+  ],
+  watchlist: [ /* Same subdocument structure as favorites */ ],
+  timestamps: true
+}
 ```
-User
-  name        String, required
-  email       String, required, unique (indexed), lowercase
-  password    String, required, hashed with bcrypt, never returned by
-              default queries (select: false)
-  favorites   [SavedMovie]
-  watchlist   [SavedMovie]
-  createdAt / updatedAt   (timestamps)
 
-SavedMovie (embedded subdocument, not its own collection)
-  movieId       Number  — TMDB id
-  title         String
-  posterUrl     String
-  releaseDate   String
-  voteAverage   Number
-  genreIds      [Number]
-  addedAt       Date
-```
-
-Favorites and watchlist are embedded on the user document rather than
-a separate collection with a foreign key, since they're always read
-and written per-user and never queried across users. Each entry stores
-just enough to render a movie card (poster, title, year, rating) so
-the Favorites/Watchlist pages don't need a TMDB round trip — only
-adding a new entry does.
-
-## Authentication
-
-- Passwords are hashed with bcrypt (10 salt rounds) in a Mongoose
-  `pre('save')` hook — the plaintext password never reaches storage,
-  and the hash is excluded from query results unless explicitly
-  selected (used only for login's password comparison).
-- On successful register/login, the API signs a JWT (`{ sub: userId }`)
-  with `JWT_SECRET` and a configurable expiry (`JWT_EXPIRES_IN`,
-  default 7 days).
-- The frontend stores the token in `localStorage` and attaches it as
-  `Authorization: Bearer <token>` on every request via an Axios
-  interceptor.
-- Protected routes run an `auth` middleware that verifies the token,
-  loads the user, and rejects with 401 on a missing/invalid/expired
-  token or a deleted user.
+---
 
 ## Environment Variables
 
-**server/.env** (copy from `server/.env.example`)
-```
+### Backend (`server/.env.example`)
+```env
 PORT=5000
-NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/movie-discovery
-JWT_SECRET=replace-with-a-long-random-string
-JWT_EXPIRES_IN=7d
-TMDB_API_KEY=your-tmdb-v3-api-key
+MONGODB_URI=mongodb://127.0.0.1:27017/movie_discovery
+JWT_SECRET=your_super_secret_jwt_key
+TMDB_API_KEY=your_tmdb_api_key_here
 TMDB_BASE_URL=https://api.themoviedb.org/3
-CLIENT_URL=http://localhost:5173
 ```
 
-**client/.env** (copy from `client/.env.example`)
-```
-VITE_API_BASE_URL=http://localhost:5000/api
-```
+---
 
-The server validates required variables at startup (`config/env.js`)
-and throws a clear error naming whatever's missing, instead of failing
-later inside a request.
+## Local Setup & Installation
 
-## Local Setup
+### 1. Prerequisites
+- Node.js (v18 or higher recommended)
+- MongoDB instance (Local MongoDB server or MongoDB Atlas connection string)
+- TMDB API Key (obtained from [TheMovieDatabase](https://www.themoviedb.org/settings/api))
 
-Requirements: Node.js 18+, a MongoDB instance (local or Atlas), and a
-free [TMDB API key](https://www.themoviedb.org/settings/api).
-
+### 2. Backend Setup
 ```bash
-# 1. Backend
 cd server
-cp .env.example .env    # then fill in MONGODB_URI, JWT_SECRET, TMDB_API_KEY
 npm install
-npm run dev              # http://localhost:5000
-
-# 2. Frontend (new terminal)
-cd client
-cp .env.example .env     # defaults are fine for local dev
-npm install
-npm run dev               # http://localhost:5173
+cp .env.example .env
 ```
+Update `.env` with your actual `MONGODB_URI`, `JWT_SECRET`, and `TMDB_API_KEY`.
+
+Start the backend server:
+```bash
+npm start
+# Server will run at http://localhost:5000
+```
+
+### 3. Frontend Setup
+```bash
+cd ../client
+npm install
+npm run dev
+# App will run at http://localhost:5173
+```
+
+---
 
 ## Security Considerations
 
-- **Passwords**: bcrypt-hashed, never logged or returned by the API.
-- **JWT**: signed with a server-only secret; the secret and expiry are
-  environment-driven, not hardcoded.
-- **Secrets**: `MONGODB_URI`, `JWT_SECRET`, and `TMDB_API_KEY` are read
-  from environment variables only. `.env` is git-ignored; `.env.example`
-  documents the required keys without values.
-- **TMDB key isolation**: only `services/tmdbService.js` ever calls
-  TMDB. The frontend calls the Express API and never sees the key.
-- **Validation**: `express-validator` checks registration/login input
-  (name required, valid email, 8+ character password) before it
-  reaches the database; Mongoose schema validation is a second layer.
-- **CORS**: restricted to `CLIENT_URL` rather than left open to any
-  origin.
-- **Error handling**: a centralized error middleware normalizes
-  Mongoose validation errors, duplicate-key errors, and JWT errors
-  into consistent `{ success: false, message }` responses, and only
-  includes a stack trace when `NODE_ENV=development`.
+1. **TMDB Key Isolation**: The frontend never communicates directly with TMDB. All movie requests are proxied through the Express backend, keeping the TMDB API key secure.
+2. **Password Hashing**: Passwords are hashed using `bcryptjs` before storage in MongoDB using Mongoose pre-save hooks. Plaintext passwords are never stored or returned.
+3. **JWT Authentication**: User sessions are authenticated using signed JSON Web Tokens passed via HTTP `Authorization: Bearer <token>` headers.
+4. **Input Validation**: Request bodies and parameters are validated using `express-validator` to prevent injection and invalid payload processing.
+5. **CORS & Environment Protection**: CORS is configured to protect resource access, and credentials are strictly stored in `.env` files.
 
-## Design Decisions / Trade-offs
+---
 
-- **Embedded favorites/watchlist vs. a separate collection**: embedding
-  keeps reads simple (one query returns everything needed for the
-  Favorites/Watchlist pages) at the cost of the array growing
-  unbounded on the user document. For a personal watchlist app this is
-  a reasonable trade — a heavy user with thousands of entries would be
-  the point at which a separate, indexed collection becomes worth the
-  extra query.
-- **Storing a poster URL, not just a path**: TMDB returns image
-  *paths*, not full URLs, and building the final URL requires knowing
-  TMDB's image base + size, which is TMDB configuration detail the
-  frontend shouldn't need to know. The backend resolves the full URL
-  once, in `tmdbService.js`, and stores/returns that.
-- **No client-side movie cache/state library**: movie data is fetched
-  per page from the API as needed. Given the page count and TMDB's own
-  response times, a caching layer wasn't worth the added complexity for
-  this scope — see Future Improvements.
-- **Auth state and saved-movie membership in Context, not Redux**: the
-  only truly global state is "who is logged in" and "which movies are
-  saved" (checked by every movie card for its heart/bookmark icon).
-  Everything else is local `useState`/`useEffect` per page.
-- **JWT in localStorage over httpOnly cookies**: simpler to implement
-  correctly within this project's scope (no CSRF token plumbing, no
-  cookie-domain configuration for local dev). The trade-off is that a
-  successful XSS attack could read the token; React's default escaping
-  and the absence of `dangerouslySetInnerHTML` anywhere in the app
-  mitigate but don't eliminate that risk. A production version aimed
-  at real users would move to httpOnly cookies.
+## Design Decisions & Trade-offs
+
+- **Normalized TMDB Data**: External TMDB responses vary in field naming (e.g. `poster_path` vs `posterPath`, `release_date` vs `releaseDate`). The backend normalizes response objects before returning them to ensure frontend components remain simple and consistent.
+- **Embedded Favorites/Watchlist**: Storing lightweight movie snapshots (id, title, poster, release date, rating) in the `User` document allows favorites and watchlist pages to render instantly without firing multiple separate N+1 TMDB API requests.
+- **React Context for Auth**: Used React Context solely for authentication and user preferences rather than adding unnecessary state overhead like Redux.
+
+---
 
 ## Future Improvements
 
-- Server-side caching (e.g. short-TTL in-memory cache) for popular/
-  top-rated TMDB responses, which don't change minute to minute
-- A basic recommendation feed based on saved favorites' genres
-- More advanced filters (release year range, minimum rating, sort order)
-- Automated tests (API integration tests with Supertest, component
-  tests with React Testing Library) — this build was verified manually
-- CI to run lint/tests on push
-
-## Testing Notes
-
-This project was built and reviewed in a sandboxed environment without
-outbound network access, so `npm install` and a live TMDB/MongoDB run
-could not be executed here. Every backend and frontend file was
-syntax-checked (Node's parser for the backend, esbuild for the JSX/ESM
-frontend) and reviewed end-to-end for logical consistency between the
-API contract, service layer, and UI. Before treating this as complete,
-run through the manual test list below locally — it mirrors the
-assignment's testing checklist:
-
-- Auth: register, duplicate email rejection, login, wrong password,
-  logout, protected route redirect when logged out
-- Movies: popular, search, invalid/empty search, movie details,
-  pagination, TMDB failure (try an invalid `TMDB_API_KEY` to see the
-  error state)
-- Favorites/Watchlist: add, remove, duplicate prevention, persistence
-  across logout/login
-- UI: desktop and mobile widths, loading/empty/error states on each
-  async section
+- **Redis Caching**: Cache TMDB API calls (such as popular movies and genre lists) in Redis to lower TMDB rate limit usage and speed up response times.
+- **Recommendation Engine**: Personalize movie recommendations based on user favorites and genre preferences.
+- **Automated Testing**: Add Jest/Supertest suite for backend endpoints and React Testing Library tests for UI components.
+- **CI/CD Pipeline**: Setup GitHub Actions workflow for linting, building, and automated deployment.

@@ -1,97 +1,135 @@
-import { Link } from 'react-router-dom';
-import { Heart, Bookmark } from 'lucide-react';
-import { releaseYear, formatRating } from '../utils/format';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Star, Heart, Bookmark, Film } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useSavedMovies } from '../context/SavedMoviesContext';
 
-const FALLBACK_POSTER =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450"><rect width="300" height="450" fill="#1E1C27"/><text x="150" y="230" font-family="sans-serif" font-size="16" fill="#9C99A8" text-anchor="middle">No poster</text></svg>`
-  );
+const MovieCard = ({ movie, onAuthRequired }) => {
+  const { isFavorite, isWatchlisted, toggleFavorite, toggleWatchlist } = useAuth();
+  const navigate = useNavigate();
+  const [imageError, setImageError] = useState(false);
+  const [isUpdatingFav, setIsUpdatingFav] = useState(false);
+  const [isUpdatingWatch, setIsUpdatingWatch] = useState(false);
 
-// Movie id/title/poster etc. can come either from a normalized TMDB
-// movie or a saved-movie subdocument from Mongo -- both shapes use
-// the same field names, so this component accepts either.
-export default function MovieCard({ movie }) {
-  const { isAuthenticated } = useAuth();
-  const { isFavorite, isInWatchlist, toggleFavorite, toggleWatchlist } = useSavedMovies();
+  const movieId = String(movie.id || movie.movieId);
+  const favorite = isFavorite(movieId);
+  const watchlisted = isWatchlisted(movieId);
 
-  const id = movie.id ?? movie.movieId;
-  const poster = movie.posterUrl;
-  const title = movie.title;
-  const date = movie.releaseDate;
-  const rating = movie.voteAverage;
-
-  const favorited = isFavorite(id);
-  const watchlisted = isInWatchlist(id);
-
-  const handleAction = async (e, action) => {
+  const handleFavoriteClick = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isAuthenticated) return;
-    try {
-      await action(id);
-    } catch {
-      // The toggle failed server-side (e.g. network hiccup); state
-      // simply doesn't change, so the button reflects reality.
+    if (isUpdatingFav) return;
+
+    setIsUpdatingFav(true);
+    const res = await toggleFavorite(movie);
+    setIsUpdatingFav(false);
+
+    if (res && res.requireAuth) {
+      if (onAuthRequired) {
+        onAuthRequired(res.message);
+      } else {
+        navigate('/login', { state: { message: res.message } });
+      }
     }
   };
 
+  const handleWatchlistClick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isUpdatingWatch) return;
+
+    setIsUpdatingWatch(true);
+    const res = await toggleWatchlist(movie);
+    setIsUpdatingWatch(false);
+
+    if (res && res.requireAuth) {
+      if (onAuthRequired) {
+        onAuthRequired(res.message);
+      } else {
+        navigate('/login', { state: { message: res.message } });
+      }
+    }
+  };
+
+  const posterSrc = movie.posterPath || (movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : null);
+  const releaseYear = movie.releaseYear || (movie.releaseDate ? movie.releaseDate.split('-')[0] : (movie.release_date ? movie.release_date.split('-')[0] : 'N/A'));
+  const rating = movie.voteAverage ?? movie.vote_average ?? 0;
+
   return (
-    <Link
-      to={`/movies/${id}`}
-      className="group relative flex flex-col overflow-hidden rounded-md bg-ink-800 ring-1 ring-ink-700 transition-colors hover:ring-marquee/60"
-    >
-      <div className="relative aspect-[2/3] w-full overflow-hidden bg-ink-700">
-        <img
-          src={poster || FALLBACK_POSTER}
-          alt={`${title} poster`}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          onError={(e) => {
-            e.currentTarget.src = FALLBACK_POSTER;
-          }}
-        />
-
-        {isAuthenticated && (
-          <div className="absolute right-2 top-2 flex flex-col gap-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-            <button
-              type="button"
-              onClick={(e) => handleAction(e, toggleFavorite)}
-              aria-pressed={favorited}
-              aria-label={favorited ? 'Remove from favorites' : 'Add to favorites'}
-              className={`rounded-full p-1.5 backdrop-blur-sm transition-colors ${
-                favorited ? 'bg-signal-brick text-paper-100' : 'bg-ink-950/70 text-paper-100 hover:bg-ink-950'
-              }`}
-            >
-              <Heart size={16} fill={favorited ? 'currentColor' : 'none'} />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => handleAction(e, toggleWatchlist)}
-              aria-pressed={watchlisted}
-              aria-label={watchlisted ? 'Remove from watchlist' : 'Add to watchlist'}
-              className={`rounded-full p-1.5 backdrop-blur-sm transition-colors ${
-                watchlisted ? 'bg-marquee text-ink-950' : 'bg-ink-950/70 text-paper-100 hover:bg-ink-950'
-              }`}
-            >
-              <Bookmark size={16} fill={watchlisted ? 'currentColor' : 'none'} />
-            </button>
+    <div className="group relative bg-slate-900 rounded-xl overflow-hidden border border-slate-800/80 hover:border-slate-700 transition-all duration-300 flex flex-col h-full shadow-lg hover:shadow-red-950/20 hover:-translate-y-1">
+      
+      {/* Poster Container */}
+      <Link to={`/movie/${movieId}`} className="relative aspect-[2/3] w-full overflow-hidden bg-slate-950 block">
+        {posterSrc && !imageError ? (
+          <img
+            src={posterSrc}
+            alt={movie.title}
+            onError={() => setImageError(true)}
+            loading="lazy"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-slate-950 text-slate-600 text-center">
+            <Film className="w-12 h-12 mb-2 stroke-[1.5]" />
+            <span className="text-xs font-medium text-slate-400 line-clamp-2">{movie.title}</span>
           </div>
         )}
 
+        {/* Rating Badge */}
         {rating > 0 && (
-          <div className="absolute bottom-2 left-2 rounded bg-ink-950/80 px-1.5 py-0.5 text-xs font-medium text-marquee">
-            {formatRating(rating)}
+          <div className="absolute top-2.5 left-2.5 bg-slate-950/85 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1 border border-slate-800 text-[11px] font-semibold text-amber-400">
+            <Star className="w-3 h-3 fill-amber-400 stroke-amber-400" />
+            <span>{typeof rating === 'number' ? rating.toFixed(1) : rating}</span>
           </div>
         )}
-      </div>
 
-      <div className="flex flex-1 flex-col gap-0.5 p-2.5">
-        <h3 className="line-clamp-2 text-sm font-medium leading-snug text-paper-100">{title}</h3>
-        <p className="text-xs text-paper-500">{releaseYear(date)}</p>
+        {/* Action Buttons Overlay */}
+        <div className="absolute top-2.5 right-2.5 flex flex-col gap-1.5 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={handleFavoriteClick}
+            disabled={isUpdatingFav}
+            title={favorite ? "Remove from Favorites" : "Add to Favorites"}
+            className={`p-2 rounded-full backdrop-blur-md border transition-all ${
+              favorite
+                ? 'bg-red-600 border-red-500 text-white'
+                : 'bg-slate-950/80 border-slate-700 text-slate-300 hover:text-white hover:bg-red-600 hover:border-red-500'
+            }`}
+          >
+            <Heart className={`w-3.5 h-3.5 ${favorite ? 'fill-current' : ''}`} />
+          </button>
+
+          <button
+            onClick={handleWatchlistClick}
+            disabled={isUpdatingWatch}
+            title={watchlisted ? "Remove from Watchlist" : "Add to Watchlist"}
+            className={`p-2 rounded-full backdrop-blur-md border transition-all ${
+              watchlisted
+                ? 'bg-amber-600 border-amber-500 text-white'
+                : 'bg-slate-950/80 border-slate-700 text-slate-300 hover:text-white hover:bg-amber-600 hover:border-amber-500'
+            }`}
+          >
+            <Bookmark className={`w-3.5 h-3.5 ${watchlisted ? 'fill-current' : ''}`} />
+          </button>
+        </div>
+      </Link>
+
+      {/* Card Info */}
+      <div className="p-3.5 flex flex-col flex-1 justify-between gap-2">
+        <div>
+          <Link
+            to={`/movie/${movieId}`}
+            className="font-semibold text-sm text-slate-100 hover:text-red-400 transition-colors line-clamp-1 block"
+            title={movie.title}
+          >
+            {movie.title}
+          </Link>
+          <div className="text-xs text-slate-400 mt-1 flex items-center justify-between">
+            <span>{releaseYear}</span>
+            <span className="text-[11px] font-medium text-slate-500 uppercase">Movie</span>
+          </div>
+        </div>
       </div>
-    </Link>
+    </div>
   );
-}
+};
+
+export default MovieCard;

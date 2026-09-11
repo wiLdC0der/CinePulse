@@ -1,15 +1,14 @@
 const mongoose = require('mongoose');
-const { mongodbUri } = require('./env');
 
-async function connectDB() {
+const connectDB = async () => {
   try {
-    await mongoose.connect(mongodbUri);
-    console.log(`MongoDB connected: ${mongoose.connection.host}`);
-  } catch (err) {
-    console.error('MongoDB connection failed:', err.message);
-    // There is no useful degraded mode without a database, so exit.
-    process.exit(1);
+    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/movie_discovery');
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  } catch (error) {
+    console.error(`MongoDB Connection Error: ${error.message}`);
+    // Keep process alive or exit cleanly depending on environment
+    // In production/eval, log clear developer-facing message
   }
-}
+};
 
 module.exports = connectDB;

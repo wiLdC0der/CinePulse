@@ -1,38 +1,49 @@
 const express = require('express');
 const cors = require('cors');
-const env = require('./config/env');
+const dotenv = require('dotenv');
 const connectDB = require('./config/db');
-const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { errorHandler, notFound } = require('./middleware/errorMiddleware');
 
-const authRoutes = require('./routes/authRoutes');
-const movieRoutes = require('./routes/movieRoutes');
-const favoriteRoutes = require('./routes/favoriteRoutes');
-const watchlistRoutes = require('./routes/watchlistRoutes');
+// Load environment variables
+dotenv.config();
+
+// Connect to MongoDB
+connectDB();
 
 const app = express();
 
-app.use(cors({ origin: env.clientUrl, credentials: true }));
-app.use(express.json());
+// CORS configuration
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
+// Body Parser Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// API Health Check
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ success: true, message: 'API is running' });
+  res.json({
+    status: 'OK',
+    message: 'Movie Discovery Backend Server is running smoothly',
+    timestamp: new Date()
+  });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/movies', movieRoutes);
-app.use('/api/favorites', favoriteRoutes);
-app.use('/api/watchlist', watchlistRoutes);
+// API Routes
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/movies', require('./routes/movieRoutes'));
+app.use('/api/favorites', require('./routes/favoriteRoutes'));
+app.use('/api/watchlist', require('./routes/watchlistRoutes'));
 
+// 404 & Error Middlewares
 app.use(notFound);
 app.use(errorHandler);
 
-async function start() {
-  await connectDB();
-  app.listen(env.port, () => {
-    console.log(`Server listening on port ${env.port} (${env.nodeEnv})`);
-  });
-}
+const PORT = process.env.PORT || 5000;
 
-start();
-
-module.exports = app;
+app.listen(PORT, () => {
+  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+});
